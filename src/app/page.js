@@ -8,12 +8,11 @@ import { db } from '../lib/firebase';
 import { Search, User, Mail, Phone, MapPin, VenusAndMars, BookOpen, Brain, Award, Upload, Download, Trash2, Menu, X, ChevronDown } from 'lucide-react';
 import CSVUpload from './components/ui/FileUpload';
 import StudentJourney from './components/sections/StudentJourney';
-
+import { GraduationCap } from 'lucide-react';
 export default function StudentJourneyDashboard() {
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -25,9 +24,6 @@ export default function StudentJourneyDashboard() {
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (menuOpen && !event.target.closest('button')) {
-        setMenuOpen(false);
-      }
       if (dropdownOpen && !event.target.closest('.search-container')) {
         setDropdownOpen(false);
       }
@@ -35,7 +31,7 @@ export default function StudentJourneyDashboard() {
 
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
-  }, [menuOpen, dropdownOpen]);
+  }, [dropdownOpen]);
 
   const fetchStudents = async () => {
     try {
@@ -119,7 +115,17 @@ export default function StudentJourneyDashboard() {
       setUploading(false);
     }
   };
-
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.6,
+        ease: "easeOut"
+      }
+    }
+  };
   const filteredStudents = students.filter(student =>
     student.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     student.rollNumber?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -142,61 +148,31 @@ export default function StudentJourneyDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-gray-800 font-poppins text-white p-4">
       {/* Header */}
+       {/* Header Section */}
+      <motion.div
+        variants={itemVariants}
+        className="text-center mb-8 pt-8"
+      >
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }} 
+          transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+          className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-blue-500/30"
+        >
+          <GraduationCap className="w-10 h-10 text-white" />
+        </motion.div>
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-cyan-200 bg-clip-text text-transparent mb-2">
+          Student Journey Dashboard
+        </h1>
+        <p className="text-gray-300 text-lg">Comprehensive performance tracking and analytics</p>
+      </motion.div>
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-7xl mx-auto mb-8"
       >
-        <div className="flex flex-col lg:flex-row justify-between items-center gap-4 mb-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-            <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-              🎓 Student Journey Dashboard
-            </h1>
-          </div>
-
-          <AnimatePresence>
-            {menuOpen && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="absolute left-42 top-2 mt-2 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-2xl p-2 min-w-[200px] z-50"
-              >
-                <button
-                  onClick={() => {
-                    setShowUpload(!showUpload);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/10 rounded-lg transition-colors"
-                >
-                  <Upload className="w-5 h-5" />
-                  {students.length > 0 ? 'Update Data' : 'Upload CSV'}
-                </button>
-                
-                {students.length > 0 && (
-                  <button
-                    onClick={() => {
-                      setStudents([]);
-                      setSelectedStudent(null);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/10 rounded-lg text-red-400 hover:text-red-300 transition-colors"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                    Clear Data
-                  </button>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
+        
+        
         {/* Search Bar */}
         {students.length > 0 && (
           <motion.div
@@ -205,8 +181,9 @@ export default function StudentJourneyDashboard() {
             transition={{ delay: 0.2 }}
             className="relative search-container max-w-2xl mx-auto mb-8"
           >
+            
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-4 top-1/3 transform-translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
                 placeholder="Search students by name or roll number..."
@@ -216,10 +193,12 @@ export default function StudentJourneyDashboard() {
                   setDropdownOpen(true);
                 }}
                 onFocus={() => setDropdownOpen(true)}
-                className="w-full pl-12 pr-12 py-4 bg-white/5 backdrop-blur-md border border-white/20 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+                className="w-full pl-12 pr-12 py-4 bg-white/5 border border-white/20 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
               />
-              <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              {/* <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" /> */}
+              
             </div>
+            
 
             {/* Dropdown Results */}
             <AnimatePresence>
@@ -256,7 +235,7 @@ export default function StudentJourneyDashboard() {
                 </motion.div>
               )}
             </AnimatePresence>
-
+              
             {/* Selected Student Info */}
             {selectedStudent && (
               <motion.div
@@ -265,13 +244,23 @@ export default function StudentJourneyDashboard() {
                 className="mt-4 text-center"
               >
                 <p className="text-gray-400 text-sm">
-                  Currently viewing: <span className="text-cyan-400 font-semibold">{selectedStudent.name}</span> • {selectedStudent.rollNumber}
+                  Currently viewing: <span className="text-cyan-400 font-semibold">{selectedStudent.name}</span> • {selectedStudent.rollNumber} • 
+                  Grade: <span className="text-cyan-400 font-semibold">{selectedStudent.grade || 'N/A'}</span>
                 </p>
               </motion.div>
             )}
           </motion.div>
+          
         )}
-
+        {/* <div className="flex justify-end mb-6">
+          <button
+            onClick={() => setShowUpload(!showUpload)}
+            className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+          >
+            <Upload className="w-5 h-5" />
+            {students.length > 0 ? 'Add Data' : 'Upload CSV'}
+          </button>
+        </div> */}
         {/* CSV Upload Modal */}
         <AnimatePresence>
           {showUpload && (
