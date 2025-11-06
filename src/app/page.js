@@ -2,14 +2,37 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { Search, User, Mail, Phone, MapPin, VenusAndMars, BookOpen, Brain, Award, Upload, Download, Trash2, Menu, X, ChevronDown } from 'lucide-react';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
+import { signOut } from 'firebase/auth';
+import { Search, Upload, Download, Filter, X, ChevronDown } from 'lucide-react';
 import CSVUpload from './components/ui/FileUpload';
 import StudentJourney from './components/sections/StudentJourney';
-import { GraduationCap } from 'lucide-react';
+import Navbar from './components/Navbar';
+
+import RouteGuard from './components/RouteGuard';
+
 export default function StudentJourneyDashboard() {
+  const router = useRouter();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkUserRole = async () => {
+      if (auth.currentUser) {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('uid', '==', auth.currentUser.uid));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const userData = querySnapshot.docs[0].data();
+          setIsAdmin(userData.role === 'admin');
+        }
+      }
+    };
+
+    checkUserRole();
+  }, []);
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,6 +40,8 @@ export default function StudentJourneyDashboard() {
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [semesterFilter, setSemesterFilter] = useState('all');
+  const [filterOpen, setFilterOpen] = useState(false);
 
   useEffect(() => {
     fetchStudents();
@@ -27,11 +52,14 @@ export default function StudentJourneyDashboard() {
       if (dropdownOpen && !event.target.closest('.search-container')) {
         setDropdownOpen(false);
       }
+      if (filterOpen && !event.target.closest('.filter-container')) {
+        setFilterOpen(false);
+      }
     };
 
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
-  }, [dropdownOpen]);
+  }, [dropdownOpen, filterOpen]);
 
   const fetchStudents = async () => {
     try {
@@ -99,6 +127,7 @@ export default function StudentJourneyDashboard() {
           attendanceOverall: (num(row[21]) + num(row[22]) + num(row[23]) + num(row[24])) / 4,
           score: num(row[25]),
           grade: row[26]?.trim() || '',
+          semester: row[27]?.trim() || 'Semester 1', // Add semester field
           timestamp: new Date().toISOString(),
         };
 
@@ -115,26 +144,35 @@ export default function StudentJourneyDashboard() {
       setUploading(false);
     }
   };
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.6,
-        ease: "easeOut"
-      }
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // The RouteGuard will automatically redirect to login page after signOut
+    } catch (error) {
+      console.error('Error signing out:', error);
+      alert('Error signing out. Please try again.');
     }
   };
-  const filteredStudents = students.filter(student =>
-    student.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    student.rollNumber?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+
+  const filteredStudents = students.filter(student => {
+    const matchesSearch = student.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.rollNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesSemester = semesterFilter === 'all' || student.semester === semesterFilter;
+    
+    return matchesSearch && matchesSemester;
+  });
 
   const handleStudentSelect = (student) => {
     setSelectedStudent(student);
     setDropdownOpen(false);
     setSearchTerm('');
+  };
+
+  const getUniqueSemesters = () => {
+    const semesters = [...new Set(students.map(student => student.semester).filter(Boolean))];
+    return semesters.length > 0 ? semesters : ['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4'];
   };
 
   if (loading) {
@@ -146,121 +184,161 @@ export default function StudentJourneyDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-gray-800 font-poppins text-white p-4">
-      {/* Header */}
-       {/* Header Section */}
-      <motion.div
-        variants={itemVariants}
-        className="text-center mb-8 pt-8"
-      >
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }} 
-          transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-          className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-blue-500/30"
-        >
-          <GraduationCap className="w-10 h-10 text-white" />
-        </motion.div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-cyan-200 bg-clip-text text-transparent mb-2">
-          Student Journey Dashboard
-        </h1>
-        <p className="text-gray-300 text-lg">Comprehensive performance tracking and analytics</p>
-      </motion.div>
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-7xl mx-auto mb-8"
-      >
-        
-        
-        {/* Search Bar */}
-        {students.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="relative search-container max-w-2xl mx-auto mb-8"
-          >
-            
-            <div className="relative">
-              <Search className="absolute left-4 top-1/3 transform-translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search students by name or roll number..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setDropdownOpen(true);
-                }}
-                onFocus={() => setDropdownOpen(true)}
-                className="w-full pl-12 pr-12 py-4 bg-white/5 border border-white/20 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
-              />
-              {/* <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" /> */}
-              
-            </div>
-            
+    <RouteGuard>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-gray-800 font-poppins text-white p-4">
+      {/* Navbar */}
+      <Navbar onLogout={handleLogout} />
 
-            {/* Dropdown Results */}
-            <AnimatePresence>
-              {dropdownOpen && searchTerm && filteredStudents.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="absolute top-full left-0 right-0 mt-2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-xl z-40 max-h-80 overflow-y-auto"
-                >
-                  {filteredStudents.map((student, index) => (
-                    <motion.div
-                      key={student.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      onClick={() => handleStudentSelect(student)}
-                      className="p-4 hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-b-0 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-white">{student.name}</p>
-                          <p className="text-sm text-gray-300">{student.rollNumber} • {student.campus}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-cyan-400 font-semibold">
-                            {((student.irpOverall + student.cldpOverall + student.overallAcademics + student.attendanceOverall) / 4).toFixed(1)}%
-                          </p>
-                          <p className="text-xs text-gray-400">Overall</p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-              
-            {/* Selected Student Info */}
-            {selectedStudent && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="mt-4 text-center"
-              >
-                <p className="text-gray-400 text-sm">
-                  Currently viewing: <span className="text-cyan-400 font-semibold">{selectedStudent.name}</span> • {selectedStudent.rollNumber} • 
-                  Grade: <span className="text-cyan-400 font-semibold">{selectedStudent.grade || 'N/A'}</span>
-                </p>
-              </motion.div>
+      {/* Main Content */}
+      <div className="p-4">
+        {/* Compact Header Section */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-7xl mx-auto mb-6"
+        >
+          {/* Controls Bar */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            {/* Left Side - Search */}
+            {students.length > 0 && isAdmin && (
+              <div className="flex-1 max-w-2xl">
+                <div className="relative search-container">
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Search students by name or roll number..."
+                      value={searchTerm}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setDropdownOpen(true);
+                      }}
+                      onFocus={() => setDropdownOpen(true)}
+                      className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all text-sm"
+                    />
+                  </div>
+
+                  {/* Dropdown Results */}
+                  <AnimatePresence>
+                    {dropdownOpen && searchTerm && filteredStudents.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute top-full left-0 right-0 mt-2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl shadow-xl z-40 max-h-64 overflow-y-auto"
+                      >
+                        {filteredStudents.map((student, index) => (
+                          <motion.div
+                            key={student.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                            onClick={() => handleStudentSelect(student)}
+                            className="p-3 hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-b-0 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-semibold text-white text-sm">{student.name}</p>
+                                <p className="text-xs text-gray-300">{student.rollNumber} • {student.campus}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm text-cyan-400 font-semibold">
+                                  {((student.irpOverall + student.cldpOverall + student.overallAcademics + student.attendanceOverall) / 4).toFixed(1)}%
+                                </p>
+                                <p className="text-xs text-gray-400">Overall</p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
             )}
-          </motion.div>
-          
-        )}
-        {/* <div className="flex justify-end mb-6">
-          <button
-            onClick={() => setShowUpload(!showUpload)}
-            className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-          >
-            <Upload className="w-5 h-5" />
-            {students.length > 0 ? 'Add Data' : 'Upload CSV'}
-          </button>
-        </div> */}
+
+            {/* Right Side - Actions */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {/* Semester Filter */}
+              {students.length > 0 && (
+                <div className="relative filter-container">
+                  <button
+                    onClick={() => setFilterOpen(!filterOpen)}
+                    className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl transition-colors text-sm"
+                  >
+                    <Filter className="w-4 h-4" />
+                    <span>{semesterFilter === 'all' ? 'All Semesters' : semesterFilter}</span>
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+
+                  <AnimatePresence>
+                    {filterOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute top-full right-0 mt-2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl shadow-xl z-40 min-w-48"
+                      >
+                        <div className="p-2">
+                          <button
+                            onClick={() => {
+                              setSemesterFilter('all');
+                              setFilterOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                              semesterFilter === 'all' 
+                                ? 'bg-cyan-500/20 text-cyan-400' 
+                                : 'hover:bg-white/10'
+                            }`}
+                          >
+                            All Semesters
+                          </button>
+                          {getUniqueSemesters().map((semester) => (
+                            <button
+                              key={semester}
+                              onClick={() => {
+                                setSemesterFilter(semester);
+                                setFilterOpen(false);
+                              }}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                                semesterFilter === semester 
+                                  ? 'bg-cyan-500/20 text-cyan-400' 
+                                  : 'hover:bg-white/10'
+                              }`}
+                            >
+                              {semester}
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+
+              {/* Add/Update Data Button */}
+              {isAdmin ? (
+                <button
+                  onClick={() => setShowUpload(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-xl transition-colors text-sm font-medium"
+                >
+                  <Upload className="w-4 h-4" />
+                  Add Data
+                </button>
+              ) : (
+                <button
+                  onClick={() => router.push('/form')}
+                  className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-xl transition-colors text-sm font-medium"
+                >
+                  <Upload className="w-4 h-4" />
+                  Update My Info
+                </button>
+              )}
+            </div>
+          </div>
+
+        </motion.div>
+
         {/* CSV Upload Modal */}
         <AnimatePresence>
           {showUpload && (
@@ -274,7 +352,7 @@ export default function StudentJourneyDashboard() {
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="bg-gray-800 w-full max-w-3xl rounded-2xl shadow-lg"
+                className="bg-gray-800 w-full max-w-3xl rounded-2xl shadow-lg border border-white/10"
               >
                 <div className="flex justify-between items-center p-6 border-b border-white/10">
                   <h2 className="text-2xl font-bold">Upload Student Data</h2>
@@ -301,6 +379,7 @@ export default function StudentJourneyDashboard() {
           )}
         </AnimatePresence>
 
+        {/* Main Content */}
         {students.length > 0 ? (
           <>
             {/* Student Journey */}
@@ -330,7 +409,8 @@ export default function StudentJourneyDashboard() {
             </button>
           </motion.div>
         )}
-      </motion.div>
+      </div>
     </div>
+    </RouteGuard>
   );
 }
